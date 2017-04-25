@@ -20,6 +20,7 @@ end
 
 def perform_request(path)
 
+  # @todo handle refresh token
   @_token ||= begin
     file = File.read(config_path)
     params = JSON.parse(file)
