@@ -7,6 +7,8 @@ require 'rubygems'
 require 'commander/import'
 require 'rest-client'
 require 'json'
+require 'csv'
+require 'yaml'
 require 'qif'
 require 'tide/to/qif/version'
 
@@ -19,7 +21,6 @@ def config_path
 end
 
 def perform_request(path)
-
   # @todo handle refresh token
   @_token ||= begin
     file = File.read(config_path)
@@ -29,7 +30,43 @@ def perform_request(path)
 
   url = "https://api.tide.co/tide-backend/rest/api/v1/external#{path}"
 
-  JSON.parse(RestClient.get(url, {:Authorization => "Bearer #{@_token}"}))
+  @_requests ||= {}
+  @_requests[path] ||= JSON.parse(RestClient.get(url, {:Authorization => "Bearer #{@_token}"}))
+end
+
+def account
+  @_account ||= begin
+    accounts = perform_request("/companies/#{company['companyId']}/accounts")
+    if accounts.size > 1
+      account_ids = accounts.collect{|c| c['accountId'] }
+      accounts.each {|c| puts "#{c['name']}: #{c['accountId']}" }
+      account_id = ask("Pick a Account ID from above: ", Integer) { |q| q.in = account_ids }
+    else
+      account_id = accounts.first['accountId']
+    end
+
+    accounts.select{|c| c['accountId'] == account_id}.first
+  end
+end
+
+def company
+  @_company ||= begin
+    companies = perform_request('/companies')
+    if companies.size > 1
+      company_ids = companies.collect{|c| c['companyId'] }
+      companies.each {|c| puts "#{c['name']}: #{c['companyId']}" }
+      company_id = ask("Pick a Company ID from above: ", Integer) { |q| q.in = company_ids }
+      puts
+    else
+      company_id = companies.first['companyId']
+    end
+
+    companies.select{|c| c['companyId'] == company_id}.first
+  end
+end
+
+def transactions
+  perform_request("/accounts/#{account['accountId']}/transactions")
 end
 
 command :login do |c|
@@ -58,35 +95,15 @@ command :login do |c|
   end
 end
 
-command :generate do |c|
-  c.syntax = 'tide-to-qif generate [options]'
+command :qif do |c|
+  c.syntax = 'tide-to-qif qif [options]'
   c.summary = ''
   c.description = ''
+  c.option '--directory STRING', String, 'The directory to save this file'
   c.action do |args, options|
-    companies = perform_request('/companies')
-    if companies.size > 1
-      company_ids = companies.collect{|c| c['companyId'] }
-      companies.each {|c| puts "#{c['name']}: #{c['companyId']}" }
-      company_id = ask("Pick a Company ID from above: ", Integer) { |q| q.in = company_ids }
-      puts
-    else
-      company_id = companies.first['companyId']
-    end
-
-    accounts = perform_request("/companies/#{company_id}/accounts")
-    if accounts.size > 1
-      account_ids = accounts.collect{|c| c['accountId'] }
-      accounts.each {|c| puts "#{c['name']}: #{c['accountId']}" }
-      account_id = ask("Pick a Account ID from above: ", Integer) { |q| q.in = account_ids }
-    else
-      account_id = accounts.first['accountId']
-    end
-
-    transactions = perform_request("/accounts/#{account_id}/transactions")
-
-    path = "#{File.dirname(__FILE__)}/tide-#{Time.now.to_i}.qif"
-    file = File.open(path, "w")
-    Qif::Writer.open(file.path, type = 'Bank', format = 'dd/mm/yyyy') do |qif|
+    options.default directory: "#{File.dirname(__FILE__)}/tmp"
+    path = "#{options.directory}/tide-#{account['accountId']}-#{Time.now.to_i}.qif"
+    Qif::Writer.open(path, type = 'Bank', format = 'dd/mm/yyyy') do |qif|
       transactions.each do |transaction|
         qif << Qif::Transaction.new(
           date: DateTime.parse(transaction['isoTransactionDateTime']).to_date,
@@ -98,6 +115,31 @@ command :generate do |c|
     end
 
     puts "Wrote to #{path}"
+  end
+end
 
+command :csv do |c|
+  c.syntax = 'tide-to-qif csv [options]'
+  c.summary = ''
+  c.description = ''
+  c.option '--directory STRING', String, 'The directory to save this file'
+  c.action do |args, options|
+    options.default directory: "#{File.dirname(__FILE__)}/tmp"
+    path = "#{options.directory}/tide-#{account['accountId']}-#{Time.now.to_i}.csv"
+
+    CSV.open(path, "wb") do |csv|
+      csv << [:date, :description, :amount, :balance]
+      transactions.reverse.each_with_index do |transaction, index|
+        balance = index == 0 ? account['availableBalance'] : nil
+        csv << [
+          DateTime.parse(transaction['isoTransactionDateTime']).strftime("%d/%m/%y"),
+          transaction['description'],
+          transaction['amount'],
+          balance
+        ]
+      end
+    end
+
+    puts "Wrote to #{path}"
   end
 end
