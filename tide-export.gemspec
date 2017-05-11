@@ -1,17 +1,17 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'tide/to/qif/version'
+require 'tide/export/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "tide-to-qif"
-  spec.version       = Tide::To::Qif::VERSION
+  spec.name          = "tide-export"
+  spec.version       = Tide::Export::VERSION
   spec.authors       = ["Scott Robertson"]
   spec.email         = ["scottymeuk@gmail.com"]
 
-  spec.summary       = "Generate a QIF file from tide.co transactions"
+  spec.summary       = "Generate a QIF or CSV file from tide.co transactions"
   spec.description   = spec.summary
-  spec.homepage      = 'http://google.com'
+  spec.homepage      = 'http://tide.co'
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0").reject do |f|

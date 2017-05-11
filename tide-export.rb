@@ -10,17 +10,19 @@ require 'json'
 require 'csv'
 require 'yaml'
 require 'qif'
-require 'tide/to/qif/version'
+require 'tide/export/version'
 
-program :name, 'tide-to-qif'
-program :version, Tide::To::Qif::VERSION
-program :description, 'Generate QIF from Tide.co'
+program :name, 'tide-export'
+program :version, Tide::Export::VERSION
+program :description, 'Generate QIF or CSV from Tide.co'
 
 def config_path
-  "#{Etc.getpwuid.dir}/.tide-to-qif.json"
+  "#{Etc.getpwuid.dir}/.tide-export.json"
 end
 
 def perform_request(path)
+  raise 'Cannot find config file' unless File.exists?(config_path)
+
   # @todo handle refresh token
   @_token ||= begin
     file = File.read(config_path)
@@ -70,7 +72,7 @@ def transactions
 end
 
 command :login do |c|
-  c.syntax = 'tide-to-qif login [options]'
+  c.syntax = 'tide-export login [options]'
   c.summary = ''
   c.description = ''
   c.option '--client_id STRING', String, 'Your tide.co client id'
@@ -96,7 +98,7 @@ command :login do |c|
 end
 
 command :qif do |c|
-  c.syntax = 'tide-to-qif qif [options]'
+  c.syntax = 'tide-export qif [options]'
   c.summary = ''
   c.description = ''
   c.option '--directory STRING', String, 'The directory to save this file'
@@ -119,7 +121,7 @@ command :qif do |c|
 end
 
 command :csv do |c|
-  c.syntax = 'tide-to-qif csv [options]'
+  c.syntax = 'tide-export csv [options]'
   c.summary = ''
   c.description = ''
   c.option '--directory STRING', String, 'The directory to save this file'
